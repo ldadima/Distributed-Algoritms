@@ -21,6 +21,10 @@ package se.kth.ict.id2203.components.crb;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import se.kth.ict.id2203.pa.broadcast.BebMessage;
+import se.kth.ict.id2203.pa.broadcast.Pp2pMessage;
+import se.kth.ict.id2203.ports.beb.BebBroadcast;
+import se.kth.ict.id2203.ports.beb.BebDeliver;
 import se.kth.ict.id2203.ports.crb.CausalOrderReliableBroadcast;
 import se.kth.ict.id2203.ports.pp2p.Pp2pDeliver;
 import se.kth.ict.id2203.ports.rb.ReliableBroadcast;
@@ -35,8 +39,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.Stack;
 
 public class WaitingCrb extends ComponentDefinition {
 
@@ -59,25 +63,31 @@ public class WaitingCrb extends ComponentDefinition {
 
             }
         }, crb);
-        subscribe(new Handler<Event>() {
+        subscribe(new Handler<BebBroadcast>() {
             @Override
-            public void handle(Event event) {
+            public void handle(BebBroadcast event) {
+                BebDeliver deliver = event.getDeliverEvent();
+                String message = deliver instanceof BebMessage ? ((BebMessage) deliver).getMessage() : "";
                 Map<Address, Integer> w = new HashMap<>(ranks);
                 w.put(self, lsn);
                 lsn++;
-                // trigger();
+                trigger(new BebBroadcast(new BebMessage(self, message, w)), rb);
             }
         }, crb);
         subscribe(new Handler<Pp2pDeliver>() {
             @Override
             public void handle(Pp2pDeliver event) {
-                pending.add(new Pending());
+                if(!(event instanceof Pp2pMessage) || ((Pp2pMessage) event).getSn() == null){
+                    throw new RuntimeException("Non correct work, wrong Pp2pEvent");
+                }
+                Pp2pMessage e = (Pp2pMessage)event;
+                pending.add(new Pending(e.getSource(), e.getW(), e.getMessage()));
                 for(Iterator<Pending> it = pending.iterator(); it.hasNext();){
                     Pending pend = it.next();
                     if(isMapALessOrEqualsMapB(pend.getW(), ranks)){
                         it.remove();
                         ranks.computeIfPresent(pend.getP(),(k, v) -> v+1);
-                        trigger();
+                        trigger(new Pp2pMessage(pend.getP(), pend.getM()), crb);
                     }
                 }
             }
@@ -102,6 +112,20 @@ public class WaitingCrb extends ComponentDefinition {
             this.p = p;
             this.w = w;
             this.m = m;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Pending)) return false;
+            Pending pending = (Pending) o;
+            return Objects.equals(p, pending.p) && Objects.equals(w, pending.w) &&
+                    Objects.equals(m, pending.m);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(p, w, m);
         }
 
         public Address getP() {

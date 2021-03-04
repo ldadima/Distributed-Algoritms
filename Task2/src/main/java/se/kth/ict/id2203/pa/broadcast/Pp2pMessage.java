@@ -22,18 +22,44 @@ package se.kth.ict.id2203.pa.broadcast;
 import se.kth.ict.id2203.ports.pp2p.Pp2pDeliver;
 import se.sics.kompics.address.Address;
 
+import java.util.Map;
+
 public class Pp2pMessage extends Pp2pDeliver {
 
 	private static final long serialVersionUID = 2193713942080123560L;
 	
 	private final String message;
+	
+	private Integer sn;
 
-	public Pp2pMessage(Address source, String message) {
-		super(source);
-		this.message = message;
-	}
+    private Map<Address, Integer> w;
 
-	public final String getMessage() {
-		return message;
-	}
+    public Pp2pMessage(Address source, String message) {
+        super(source);
+        this.message = message;
+    }
+
+    public Pp2pMessage(Address source, String message, int sn) {
+        super(source);
+        this.message = message;
+        this.sn = sn;
+    }
+
+    public Pp2pMessage(Address source, String message,  Map<Address, Integer> w) {
+        super(source);
+        this.message = message;
+        this.w = w;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public Integer getSn() {
+        return sn;
+    }
+
+    public Map<Address, Integer> getW() {
+        return w;
+    }
 }
