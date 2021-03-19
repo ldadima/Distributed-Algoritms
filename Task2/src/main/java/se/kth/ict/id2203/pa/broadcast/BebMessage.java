@@ -13,22 +13,17 @@ public class BebMessage extends BebDeliver {
 
 	private Integer sn;
 
-	private Map<Address, Integer> w;
+    private Map<Address, Integer> w;
 
-	public BebMessage(Address source, String message) {
+    public BebMessage(Address source, String message) {
 		super(source);
 		this.message = message;
 	}
 
-	public BebMessage(Address source, String message, int sn) {
+	public BebMessage(Address source, String message, Integer sn, Map<Address, Integer> w) {
 		super(source);
 		this.message = message;
 		this.sn = sn;
-	}
-
-	public BebMessage(Address source, String message,  Map<Address, Integer> w) {
-		super(source);
-		this.message = message;
 		this.w = w;
 	}
 

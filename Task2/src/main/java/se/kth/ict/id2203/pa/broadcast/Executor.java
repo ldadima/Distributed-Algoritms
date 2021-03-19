@@ -39,8 +39,8 @@ public final class Executor {
 
 		Scenario scenario = new Scenario(Main.class) {
 			{
-				//command(1, "S10:B1:S10:B2:S10:B3:S3000:X");
-				//command(1, "S10:R1:S10:R2:S10:R3:S3000:X");
+				// command(1, "S10:B1:S10:B2:S10:B3:S3000:X");
+				// command(1, "S10:R1:S10:R2:S10:R3:S3000:X");
 				command(1, "S10:C1:S10:C2:S10:C3:S3000:X");
 				command(2, "S10");
 				command(3, "S10");

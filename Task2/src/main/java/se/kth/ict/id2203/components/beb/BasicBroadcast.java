@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import se.kth.ict.id2203.pa.broadcast.BebMessage;
 import se.kth.ict.id2203.pa.broadcast.Pp2pMessage;
+import se.kth.ict.id2203.pa.broadcast.RbMessage;
 import se.kth.ict.id2203.ports.beb.BebBroadcast;
 import se.kth.ict.id2203.ports.beb.BebDeliver;
 import se.kth.ict.id2203.ports.beb.BestEffortBroadcast;
@@ -36,12 +37,14 @@ import se.sics.kompics.Handler;
 import se.sics.kompics.Port;
 import se.sics.kompics.address.Address;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 public class BasicBroadcast extends ComponentDefinition {
 
 	private static final Logger logger = LoggerFactory.getLogger(BasicBroadcast.class);
-	private final Port<BestEffortBroadcast> beb = requires(BestEffortBroadcast.class);
+	private final Port<BestEffortBroadcast> beb = provides(BestEffortBroadcast.class);
 	private final Port<PerfectPointToPointLink> pp2p = requires(PerfectPointToPointLink.class);
 
 	public BasicBroadcast(BasicBroadcastInit init) {
@@ -53,8 +56,15 @@ public class BasicBroadcast extends ComponentDefinition {
             public void handle(BebBroadcast event) {
                 BebDeliver deliver = event.getDeliverEvent();
                 String message = deliver instanceof BebMessage ? ((BebMessage) deliver).getMessage() : "";
+                logger.info("BEB - {}", deliver);
+                logger.info("Message BEB - {}", message);
+                Map<Address, Integer> map = deliver instanceof BebMessage ? ((BebMessage) deliver).getW() : new HashMap<>();
+                map = map == null ? new HashMap<>(): map;
+                logger.info("SEND BEB W - {}", map);
+                Integer sn = deliver instanceof BebMessage ? (((BebMessage) deliver).getSn() != null ? ((BebMessage) deliver).getSn() : 0) : 0;
+
                 for(Address p: all){
-                    trigger(new Pp2pSend(p, new Pp2pMessage(deliver.getSource(), message)), pp2p);
+                    trigger(new Pp2pSend(p, new Pp2pMessage(deliver.getSource(), message, sn, map)), pp2p);
                 }
             }
         }, beb);
@@ -62,7 +72,10 @@ public class BasicBroadcast extends ComponentDefinition {
             @Override
             public void handle(Pp2pDeliver event) {
                 String message = event instanceof Pp2pMessage ? ((Pp2pMessage) event).getMessage() : "";
-                trigger(new Pp2pMessage(event.getSource(), message), beb);
+                Map<Address, Integer> map = event instanceof Pp2pMessage ? ((Pp2pMessage) event).getW() : new HashMap<>();
+                map = map == null ? new HashMap<>(): map;
+                Integer sn = event instanceof Pp2pMessage ? ((Pp2pMessage) event).getSn() : 0;
+                trigger(new BebMessage(event.getSource(), message, sn, map), beb);
             }
         }, pp2p);
 	}

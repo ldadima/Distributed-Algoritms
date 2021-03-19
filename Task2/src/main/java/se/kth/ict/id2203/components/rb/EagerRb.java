@@ -4,18 +4,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.kth.ict.id2203.pa.broadcast.BebMessage;
 import se.kth.ict.id2203.pa.broadcast.Pp2pMessage;
+import se.kth.ict.id2203.pa.broadcast.RbMessage;
 import se.kth.ict.id2203.ports.beb.BebBroadcast;
 import se.kth.ict.id2203.ports.beb.BebDeliver;
 import se.kth.ict.id2203.ports.beb.BestEffortBroadcast;
 import se.kth.ict.id2203.ports.pp2p.Pp2pDeliver;
+import se.kth.ict.id2203.ports.rb.RbBroadcast;
+import se.kth.ict.id2203.ports.rb.RbDeliver;
 import se.kth.ict.id2203.ports.rb.ReliableBroadcast;
 import se.sics.kompics.ComponentDefinition;
 import se.sics.kompics.Handler;
 import se.sics.kompics.Port;
-import se.sics.kompics.Start;
 import se.sics.kompics.address.Address;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -23,50 +27,52 @@ public class EagerRb extends ComponentDefinition {
 
 	private static final Logger logger = LoggerFactory.getLogger(EagerRb.class);
     private final Port<BestEffortBroadcast> beb = requires(BestEffortBroadcast.class);
-    private final Port<ReliableBroadcast> rb = requires(ReliableBroadcast.class);
+    private final Port<ReliableBroadcast> rb = provides(ReliableBroadcast.class);
     private int seqnum = 0;
 
 	public EagerRb(EagerRbInit init) {
         Set<Deliver> delivered = new HashSet<>();
         Address self = init.getSelfAddress();
-        subscribe(new Handler<Start>() {
+        logger.info("SELF - {}", self);
+        subscribe(new Handler<RbBroadcast>() {
             @Override
-            public void handle(Start event) {
-
-            }
-        }, rb);
-        subscribe(new Handler<BebBroadcast>() {
-            @Override
-            public void handle(BebBroadcast event) {
+            public void handle(RbBroadcast event) {
                 seqnum++;
-                BebDeliver deliver = event.getDeliverEvent();
-                String message = deliver instanceof BebMessage ? ((BebMessage) deliver).getMessage() : "";
+                RbDeliver deliver = event.getDeliverEvent();
+                String message = deliver instanceof RbMessage ? ((RbMessage) deliver).getMessage() : "";
 
-                trigger(new BebBroadcast(new BebMessage(self, message, seqnum)), beb);
+                logger.info("SN RB send - {}", seqnum);
+
+                Map<Address, Integer> map = deliver instanceof RbMessage ? ((RbMessage) deliver).getW() : new HashMap<>();
+                map = map == null ? new HashMap<>(): map;
+                logger.info("SEND RB W - {}", map);
+
+                trigger(new BebBroadcast(new BebMessage(self, message, seqnum, map)), beb);
             }
         }, rb);
-        subscribe(new Handler<Pp2pDeliver>() {
+        subscribe(new Handler<BebDeliver>() {
             @Override
-            public void handle(Pp2pDeliver event) {
-                if(!(event instanceof Pp2pMessage) ){
-                    throw new RuntimeException("Non correct work, wrong Pp2pEvent");
+            public void handle(BebDeliver event) {
+                if(!(event instanceof BebMessage) ){
+                    throw new RuntimeException("Non correct work, wrong BebEvent");
                 }
-                Pp2pMessage e = (Pp2pMessage)event;
+                BebMessage e = (BebMessage)event;
+                logger.info("SRC - {}", e.getSource());
                 Deliver d = new Deliver(e.getSn(), e.getSource());
-                if(delivered.contains(d)){
+                if(!delivered.contains(d)){
                     delivered.add(d);
-                    trigger(new Pp2pMessage(e.getSource(), e.getMessage()), rb);
-                    trigger(new BebBroadcast(new BebMessage(e.getSource(), e.getMessage(), e.getSn())), beb);
+                    trigger(new RbMessage(e.getSource(), e.getMessage(), e.getSn(), e.getW()), rb);
+                    trigger(new BebBroadcast(new BebMessage(e.getSource(), e.getMessage(), e.getSn(), e.getW())), beb);
                 }
             }
         }, beb);
 	}
 
 	private static class Deliver{
-	    private final int sn;
+	    private final Integer sn;
 	    private final Address address;
 
-        public Deliver(int sn, Address address) {
+        public Deliver(Integer sn, Address address) {
             this.sn = sn;
             this.address = address;
         }
@@ -84,7 +90,7 @@ public class EagerRb extends ComponentDefinition {
             if (this == o) return true;
             if (!(o instanceof Deliver)) return false;
             Deliver deliver = (Deliver) o;
-            return sn == deliver.sn && Objects.equals(address, deliver.address);
+            return Objects.equals(sn, deliver.sn) && Objects.equals(address, deliver.address);
         }
 
         @Override

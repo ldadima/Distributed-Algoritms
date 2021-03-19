@@ -22,11 +22,17 @@ package se.kth.ict.id2203.components.crb;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se.kth.ict.id2203.pa.broadcast.BebMessage;
+import se.kth.ict.id2203.pa.broadcast.CrbMessage;
 import se.kth.ict.id2203.pa.broadcast.Pp2pMessage;
+import se.kth.ict.id2203.pa.broadcast.RbMessage;
 import se.kth.ict.id2203.ports.beb.BebBroadcast;
 import se.kth.ict.id2203.ports.beb.BebDeliver;
 import se.kth.ict.id2203.ports.crb.CausalOrderReliableBroadcast;
+import se.kth.ict.id2203.ports.crb.CrbBroadcast;
+import se.kth.ict.id2203.ports.crb.CrbDeliver;
 import se.kth.ict.id2203.ports.pp2p.Pp2pDeliver;
+import se.kth.ict.id2203.ports.rb.RbBroadcast;
+import se.kth.ict.id2203.ports.rb.RbDeliver;
 import se.kth.ict.id2203.ports.rb.ReliableBroadcast;
 import se.sics.kompics.ComponentDefinition;
 import se.sics.kompics.Event;
@@ -45,7 +51,7 @@ import java.util.Set;
 public class WaitingCrb extends ComponentDefinition {
 
     private static final Logger logger = LoggerFactory.getLogger(WaitingCrb.class);
-    private final Port<CausalOrderReliableBroadcast> crb = requires(CausalOrderReliableBroadcast.class);
+    private final Port<CausalOrderReliableBroadcast> crb = provides(CausalOrderReliableBroadcast.class);
     private final Port<ReliableBroadcast> rb = requires(ReliableBroadcast.class);
     private int lsn = 0;
 
@@ -57,37 +63,34 @@ public class WaitingCrb extends ComponentDefinition {
         });
         Address self = init.getSelfAddress();
         Set<Pending> pending = new HashSet<>();
-        subscribe(new Handler<Start>() {
+        subscribe(new Handler<CrbBroadcast>() {
             @Override
-            public void handle(Start event) {
-
-            }
-        }, crb);
-        subscribe(new Handler<BebBroadcast>() {
-            @Override
-            public void handle(BebBroadcast event) {
-                BebDeliver deliver = event.getDeliverEvent();
-                String message = deliver instanceof BebMessage ? ((BebMessage) deliver).getMessage() : "";
+            public void handle(CrbBroadcast event) {
+                CrbDeliver deliver = event.getDeliverEvent();
+                String message = deliver instanceof CrbMessage ? ((CrbMessage) deliver).getMessage() : "";
                 Map<Address, Integer> w = new HashMap<>(ranks);
                 w.put(self, lsn);
                 lsn++;
-                trigger(new BebBroadcast(new BebMessage(self, message, w)), rb);
+                logger.info("SEND CRB W - {}", w);
+                trigger(new RbBroadcast(new RbMessage(self, message, 0, w)), rb);
             }
         }, crb);
-        subscribe(new Handler<Pp2pDeliver>() {
+        subscribe(new Handler<RbDeliver>() {
             @Override
-            public void handle(Pp2pDeliver event) {
-                if(!(event instanceof Pp2pMessage) || ((Pp2pMessage) event).getSn() == null){
-                    throw new RuntimeException("Non correct work, wrong Pp2pEvent");
+            public void handle(RbDeliver event) {
+                if(!(event instanceof RbMessage)){
+                    throw new RuntimeException("Non correct work, wrong RbEvent");
                 }
-                Pp2pMessage e = (Pp2pMessage)event;
+                RbMessage e = (RbMessage)event;
                 pending.add(new Pending(e.getSource(), e.getW(), e.getMessage()));
                 for(Iterator<Pending> it = pending.iterator(); it.hasNext();){
                     Pending pend = it.next();
+                    logger.info("W - {}", pend.getW());
+                    logger.info("a - {}, b - {}", pend.getW(), ranks);
                     if(isMapALessOrEqualsMapB(pend.getW(), ranks)){
                         it.remove();
                         ranks.computeIfPresent(pend.getP(),(k, v) -> v+1);
-                        trigger(new Pp2pMessage(pend.getP(), pend.getM()), crb);
+                        trigger(new CrbMessage(pend.getP(), pend.getM()), crb);
                     }
                 }
             }
@@ -96,7 +99,8 @@ public class WaitingCrb extends ComponentDefinition {
 
     private boolean isMapALessOrEqualsMapB(Map<Address, Integer> a, Map<Address, Integer> b){
         for(Address p: a.keySet()){
-            if(a.get(p) > b.get(p)){
+            if(a.get(p) == null) continue;
+            if((a.get(p) != null && b.get(p) == null) || a.get(p) > b.get(p)){
                 return false;
             }
         }

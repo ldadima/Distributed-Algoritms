@@ -29,8 +29,8 @@ public class Pp2pMessage extends Pp2pDeliver {
 	private static final long serialVersionUID = 2193713942080123560L;
 	
 	private final String message;
-	
-	private Integer sn;
+
+    private Integer sn;
 
     private Map<Address, Integer> w;
 
@@ -39,15 +39,10 @@ public class Pp2pMessage extends Pp2pDeliver {
         this.message = message;
     }
 
-    public Pp2pMessage(Address source, String message, int sn) {
+    public Pp2pMessage(Address source, String message, Integer sn, Map<Address, Integer> w) {
         super(source);
         this.message = message;
         this.sn = sn;
-    }
-
-    public Pp2pMessage(Address source, String message,  Map<Address, Integer> w) {
-        super(source);
-        this.message = message;
         this.w = w;
     }
 
